@@ -1,0 +1,207 @@
+DNA METABARCODING BIOINFORMATICS NOTEBOOK FOR DIET ANALYSIS
+BATYA NIGHTINGALE
+#########################################################################################
+TIPS
+If you choose to have minKnow do live basecalling, it will 
+	make folders called pass, skip, and fail you should 
+	either put those all into the basecaller OR turn live basecalling off
+If you do a tabular blast output, make sure blast format output is qseq NOT sseq!!!!!!!!
+make sure blast is maxseq1 not maxseq10, unless otherwise specified
+
+get a text editor application 
+NO SPACES in file names
+NAME FILES as you go along, this helps you keep track
+example:
+hunter_cat_trimmed_filtered.fasta
+
+It's a good idea to keep a txt document of the commands that you run so you have it both for documentation
+and also if you need to run the command again. 
+
+ wc -l 
+ to check that a blast or other is working, update to see if the number of lines is growing
+
+###Concatonation check
+Batyas-MacBook-Air:barcode01 batya$ wc -l *.fastq
+  729588 total
+##this counts all of the sequences in any file that ends with fastq in the first barcode folder
+Batyas-MacBook-Air:barcode01 batya$ wc -l HUN_cat.fastq 
+  729588 HUN_cat.fastq 
+This counts the reads of the concatenated file. If the number's don't match, something is wrong. 
+
+#####making a shell script 
+write and save as .sh
+chmod u+x filename.sh
+./filename.sh
+
+******************************************************************************************
+RESOURCES: 
+A good text introduction to computational biology from oregon state:
+http://library.open.oregonstate.edu/computationalbiology/
+
+
+See the seven deadly sins of DNA barcoding:
+http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.474.9744&rep=rep1&type=pdf
+
+https://github.com/
+https://www.biostars.org/ 
+https://nanoporetech.com/
+
+
+Program documentation:
+you can type the name of the program and -h or -help to see the syntax options 
+
+
+minimap2:	https://lh3.github.io/minimap2/minimap2.html
+seqkit:		https://bioinf.shenwei.me/seqkit/usage/
+porechop:	https://github.com/rrwick/Porechop
+nanofilt:	https://github.com/wdecoster/nanofilt
+racon:		https://github.com/isovic/racon
+blast:		https://blast.ncbi.nlm.nih.gov/Blast.cgi
+MEGAN: 		http://ab.inf.uni-tuebingen.de/software/megan6/
+
+
+##########################################################################################
+##########################################################################################
+
+Below is a workflow for diet analysis from songbird fecal samples. The DNA from songbird 
+fecal samples was pooled by site, barcoded, and sequenced with the MinION.
+
+##########################################################################################
+##########################################################################################
+
+#Step 1- basecalling
+ /Applications/ont-guppy-cpu/bin/./guppy_basecall --input_path /Users/batya/Desktop/REDO_3192019_BRN/3192019_MAR_HUN/20190321_1859_MN26301_FAK44004_3091dbdc/fast5_pass_skip  --save_path /Users/batya/Desktop/REDO_3192019_BRN/3192019_MAR_HUN/20190321_1859_MN26301_FAK44004_3091dbdc/basecalled  --flowcell FLO-MIN106 --kit SQK-PBK004
+A) point to guppy_basecall
+B) --input_path 
+<<drag file or files that you want to basecall>>
+C) --save_path 
+make a folder to put your basecalled reads in, to keep them seperate from the raw ones
+D) --flowcell FLO-MIN106 --kit SQK-PBK004 
+these are the flowcell and barcoding kits we used, if you used a different kit, specify accordingly
+
+#Step 2- demultiplexing 
+/Applications/ont-guppy-cpu/bin/./guppy_barcoder -i /Users/batya/Desktop/3192019_BRN\ copy\ 2/fastq_32219/BRN_COI_cat.fastq -s /Users/batya/Desktop/3192019_BRN\ copy\ 2/demultiplexed --barcode_kits SQK-PBK004
+A) point to guppy_barcoder
+B) -i 
+<<input file path>>
+C) -s 
+<<save filepath>>
+D) --barcode_kits SQK-PBK004 
+you may have to put double quotations --barcode_kits ""SQK-PBK004""
+
+#step 3- concatenate 
+cd barcode_folder
+cat *.fastq > site_cat.fastq
+##this puts everthing in that folder ending with .fastq into a file which you name and place
+ 
+#step 4- porechop (removing barcodes and adapters)
+Batyas-MacBook-Air:barcode01 batya$ porechop -i HUN_cat_filtered.fastq -o HUN_cat_filtered_trimmed.fastq
+A) porechop
+B) -i 
+input file (put in the one that you already filtered)
+C) -o 
+output file 
+
+#step 5- nanofilt
+Batyas-MacBook-Air:barcode01 batya$ cat HUN_cat_trimmed.fastq |  NanoFilt -q8 -l100 > HUN_cat_filtered.fastq
+A) make sure you are in the right barcode folder
+B) cat filetofilter.fastq 
+C) |
+D) NanoFilt -q8 -l100
+this is taking out anything with a quality score less than 8 and anything less than 100 bases long
+E) > outputfilename_filtered.fastq
+ 
+#step 6 fastq to fasta with seqkit
+#otherwise you can specify a .fasta output in nanofilt. Either should work. 
+Batyas-MacBook-Air:~ batya$ seqkit fq2fa  /Volumes/BRN_seagate/HUN_readsbyspecies/Otiorhynchus_singularis.fastq > /Volumes/BRN_seagate/HUN_readsbyspecies/otiorhynchus_singularis.fasta
+ A) seqkit fq2fa
+ B) path/input file 
+ C) >
+ D) path/output file 
+
+#step 7 cleaning raw reads
+This step attempts to control for the minion's relatively high error rate. 
+
+This is done in two iterations, where the output of the first iteration is mapped back to the original reads and cleaned again. 
+You need to duplicate your original fastq read file and name it something like site_cp.fastq 
+the copy needs to have DIFFERENT READ NAMES 
+an easy way to do this is to open your reads in text editor document then GREP find all @ symbols and replace them with @1
+this inserts the number 1 before the read ID 
+
+KILLED:9 is an error that I get sometimes when running minimap2 this can be fixed by separating 
+your racon file into two smaller files and then concatenating them later or by using a better computer. 
+
+##########Iteration 1
+
+minimap2   reads_cp.fastq    reads.fastq  >    map1.paf
+
+racon    reads.fastq    map1.paf   reads_cp.fastq   >   racon1.fasta
+ 
+
+##########Iteration 2
+
+minimap2   racon1.fasta   reads.fastq    >    map2.paf 
+
+racon    reads.fastq    map2.paf    racon1.fasta   >   racon2.fasta
+__________________________________________________________________________________________
+
+the racon2.fasta is blasted
+the racon2blast.txt  and racon2.fasta used for megan
+__________________________________________________________________________________________
+ 
+
+#step 8- making a blast database
+/Applications/ncbi-blast-2.8.1+/bin/./makeblastdb -dbtype nucl -in COI.fasta -out Somefilename
+A) point and execute makeblastdb
+B) -dbtype nucl
+C) -in 
+input file for us it's COI.fasta
+D) -out call this something like COI_blastdb (I made a folder called blast_db to make the database files easier to find)
+There is SOMEWAY to get taxonomy data in a tabular blast output. One day I will find out how. 
+ 
+ 
+#step 9- blast. MEGAN6 takes the default blast output. If you don't need to use MEGAN, the tabular output is easier to navigate. 
+BLAST TAKES FASTA NOT FASTQ- hence the seqkit step (or putting .fasta in your nanofilt output)
+
+####	TABULAR BLAST
+ Batyas-MacBook-Air:3192019_MAR_HUN batya$ /Applications/ncbi-blast-2.8.1+/bin/./blastn -query /Users/batya/Desktop/REDO_3192019_BRN/3192019_MAR_HUN/demultiplexed/barcode01/HUN_cat_nanofiltered_chopped_blasttruncated.fasta -db /Users/batya/Desktop/REDO_3192019_BRN/3192019_MAR_HUN/blast_db/COI_blast.fasta -out /Volumes/SeagateBackupPlusDrive/HUN_COI_blast_.01_blasttruncated -evalue 0.01 -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq"  -num_threads 24 -max_target_seqs 10
+Warning: [blastn] Number of threads was reduced to 4 to match the number of available CPUs
+A) point and execute blastn
+B) -query <<input fasta file>>
+C) -db <<drag in your database folder>>
+D) -out filename_.01 
+you don't need a file suffix on this one, but you should name it something like site_COI_blast
+E) -evalue 0.01 -outfmt "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send qlen slen"  -num_threads 24 -max_target_seqs 10
+just copy and paste that in, it is telling the program what kind of information we want it to give us in the output file
+
+#####	DEFAULT BLAST FOR MEGAN
+Batyas-MacBook-Pro:map_clean batyanightingale$ /Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Users/batyanightingale/Desktop/map_clean/HUN_racon_cat.fasta   -db /Users/batyanightingale/Desktop/422019_BRN_COI/COI/COI_database  -out /Users/batyanightingale/Desktop/map_clean/HUNTER_racon_blast  -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+
+NOTE that the -evalue is set to 1E-20 this is one of the two parameters used to trim down blast results. Evalue, 
+max target seqs, bitscore, and percent identity can be used to pair down your reads. 
+
+
+#step 10 MEGAN6
+MEGAN can be very slow, especially with larger files. 
+After you install you can go into the MEGAN folder in applications and edit the vm.options file to increase the amount of memory. 
+The number to change it to depends on your computer. 
+
+IMPORT FROM BLAST 
+
+Input both the reads file (the one that you used for blast) and the blast output file into MEGAN
+
+click analyze taxonomy 
+EGGNOG and INTERPRO2GO turned off
+
+LCA parameters depend on your data. I used a 97 min percent identification and the weighted LCA algorithm covering 80% of the reads.  
+You can also filter for evalue and bitscore in megan, but I specified that in my blast so there was no need. 
+
+MEGAN6 can go a lot of great things like aligning and building consensus sequences by species, but imaging going through 100's of 
+species to align and make consensus sequences in MEGAN, just to blast again to find that not all of the consensus reads can be confirmed as species. 
+
+A useful option that MEGAN has is  compare .
+Once you "meganize" your data (make megan files for your sites or samples), you can use this option to view them all together in one window.
+Megan also makes decent charts and cluster analysis. 
+
+
+echo Batya Nightingale

@@ -1,0 +1,520 @@
+Bioinformatics lab notebook 
+Batya Nightingale 
+July 2019
+
+DNA metabarcoding of songbird fecal samples for diet analysis
+
+the DNA from each fecal sample was extracted with zymo and qiagen kits
+then amplified with the mlCOIintF and jgHCO2198 primers from Leray et al. 2013
+mlCOIintF
+GG WAC WGG WTG AAC WGT WTA YCC YCC
+jgHCO2198
+TA NAC YTC NGG RTG NCC RAA RAA YCA
+
+these samples were barcoded with ONT 1D Genomic DNA by Ligation (SQK-LSK109) kit 
+combined with the barcode expansion pack (EXP-PBC001) and sequenced with the MinION 
+sequencer with FLO-MIN106 9.4 flowcells
+
+Run1: barcodes 01-06
+Run2: barcodes 07-12
+Run3: barcodes 01-06
+Run4: barcodes 07-12
+Run5: barcodes 01-06
+master list of run/barcode/sampleID combinations is somewhere else. 
+
+making a shell script:
+write text document with code
+save as filename.sh
+in terminal:
+chmod u+x path/to/file/filename.sh 
+close and re-open terminal
+./filename.sh
+__________________________________________________________________________________________
+things needed before we start:
+
+make sure to have the right sequence database using ncbi edirect
+https://dataguide.nlm.nih.gov/edirect/install.html
+esearch -db nuccore -query "(COI)" | efetch -format fasta > /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/coi_071719.fasta
+
+making a blast database
+Applications/ncbi-blast-2.9.0+/bin/./makeblastdb -dbtype nucl -in COI.fasta -out Somefilename
+input file: for us it's COI.fasta (this was obtained through efetch above) 
+make note of the database location, we need this later when doing blast
+
+3209477 sequences in new COI database 
+
+
+
+not to be confused with the blast database, we need a way to assign taxa names to tab blast output 
+this will be called the taxa database. for this we copy, extract, and edit the fasta output from efetch 
+(the same one that we used to make the blast database)
+our goal is to obtain a list of accession numbers and taxa names that are matched to then go back and assign taxa names to accessions 
+to make accessions and taxa name database :
+I used the following regular expression to extract from the blast fasta db
+>\S+\s+\S+\s+\S+\s+\S+
+then find accession with a regular expression 
+>(\S+)\s
+and replace with the accession (group1) plus a tab (deletes > and space before taxa name)
+\1\t
+
+further cleaning was done like deleting certain unnecessary words like COI/voucher/CO1/cytochrome oxidase one/cytochrome oxidase I
+this taxa database is used in R at the end but dont forget about it as it is maybe the most valuable thing. 
+
+General notes about this particular script:
+_t added to show file has been trimmed
+_f filtered to show file has been trimmed
+_cp is a copy with the @ replaced with @1 so minimap2 can map without getting confused about sequence names with self mapping
+
+
+tested racon iterations -- does percent ident or number of unique taxa over 97 increase by with more correction?
+with big files, yes. with smaller files no. with more iterations, racon crashes anyway. Therefore for our application, 
+two is enough. 
+__________________________________________________________________________________________
+******************************************************************************************
+RESOURCES: 
+A good text introduction to computational biology from oregon state:
+http://library.open.oregonstate.edu/computationalbiology/
+
+regular expressions help, great website https://regex101.com/
+
+See the seven deadly sins of DNA barcoding:
+http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.474.9744&rep=rep1&type=pdf
+
+https://github.com/
+https://www.biostars.org/ 
+https://nanoporetech.com/
+
+Program documentation:
+you can type the name of the program and -h or -help to see the syntax options 
+
+minimap2:	https://lh3.github.io/minimap2/minimap2.html
+seqkit:		https://bioinf.shenwei.me/seqkit/usage/
+porechop:	https://github.com/rrwick/Porechop
+nanofilt:	https://github.com/wdecoster/nanofilt
+racon:		https://github.com/isovic/racon
+blast:		https://blast.ncbi.nlm.nih.gov/Blast.cgi
+******************************************************************************************
+__________________________________________________________________________________________
+
+For each run folder we need:
+mkdir basecalled
+mkdir filtered
+mkdir trimmed
+mkdir demultiplexed
+mkdir map_clean
+mkdir blast
+
+#########################################################################################
+###      ACADIA   SHELL       SCRIPT     ################################################
+#########################################################################################
+/Applications/ont-guppy-cpu/bin/./guppy_basecaller --input_path /Volumes/BRN_seagate/minion/071619RUN1/071819RUN3/20190718_1407_MN26301_FAL04400_802da6c9/fast5  --save_path /Volumes/BRN_seagate/minion/071619RUN1/basecalled   --flowcell FLO-MIN106 --kit SQK-LSK109
+/Applications/ont-guppy-cpu/bin/./guppy_barcoder -i /Volumes/BRN_seagate/minion/071619RUN1/basecalled  -s /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed --barcode_kits EXP-PBC001 
+#
+cat /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/barcode01/*.fastq > /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode01.fastq 
+cat /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/barcode02/*.fastq > /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode02.fastq 
+cat /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/barcode03/*.fastq > /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode03.fastq 
+cat /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/barcode04/*.fastq > /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode04.fastq 
+cat /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/barcode05/*.fastq > /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode05.fastq 
+cat /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/barcode06/*.fastq > /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode06.fastq 
+#
+porechop -i /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode01.fastq  -o /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode01_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode02.fastq  -o /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode02_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode03.fastq  -o /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode03_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode04.fastq  -o /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode04_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode05.fastq  -o /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode05_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071619RUN1/demultiplexed/run1_barcode06.fastq  -o /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode06_t.fastq 
+#
+nanoplot --summary /Volumes/BRN_seagate/minion/071619RUN1/basecalled/sequencing_summary.txt --loglength -o /Volumes/BRN_seagate/minion/071619RUN1/basecalled/sequencing_summary_nanoplot_loglength
+#
+cat /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode01_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode01_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode02_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode02_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode03_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode03_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode04_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode04_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode05_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode05_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071619RUN1/trimmed/run1_barcode06_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode06_t_f.fastq
+#
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode01_t_f.fastq > /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode02_t_f.fastq > /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode03_t_f.fastq > /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode04_t_f.fastq > /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode05_t_f.fastq > /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode06_t_f.fastq > /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_t_f_cp.fastq
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode01_t_f.fastq  >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode02_t_f.fastq  >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode03_t_f.fastq  >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode04_t_f.fastq  >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode05_t_f.fastq  >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode06_t_f.fastq  >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_map1.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode01_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_map1.paf /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode02_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_map1.paf /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode03_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_map1.paf /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode04_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_map1.paf /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode05_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_map1.paf /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode06_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_map1.paf /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_racon1.fasta
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_racon1.fasta    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode01_t_f.fastq   >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_racon1.fasta    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode02_t_f.fastq   >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_racon1.fasta    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode03_t_f.fastq   >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_racon1.fasta    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode04_t_f.fastq   >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_racon1.fasta    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode05_t_f.fastq   >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_racon1.fasta    /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode06_t_f.fastq   >    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_map2.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode01_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_map2.paf  /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_racon1.fasta   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode02_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_map2.paf  /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_racon1.fasta   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode03_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_map2.paf  /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_racon1.fasta   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode04_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_map2.paf  /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_racon1.fasta   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode05_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_map2.paf  /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_racon1.fasta   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071619RUN1/filtered/run1_barcode06_t_f.fastq    /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_map2.paf  /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_racon1.fasta   >   /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_racon2.fasta
+#
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode01_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode01_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode02_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode02_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode03_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode03_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode04_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode04_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode05_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode05_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071619RUN1/map_clean/run1_barcode06_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode06_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+#
+/Applications/ont-guppy-cpu/bin/./guppy_basecaller --input_path /Volumes/BRN_seagate/minion/071719RUN2/071719RUN2/071719RUN2/20190717_1448_MN26301_FAK97004_f005f754/fast5  --save_path /Volumes/BRN_seagate/minion/071719RUN2/basecalled   --flowcell FLO-MIN106 --kit SQK-LSK109
+/Applications/ont-guppy-cpu/bin/./guppy_barcoder -i /Volumes/BRN_seagate/minion/071719RUN2/basecalled  -s /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed --barcode_kits EXP-PBC001 
+#
+cat /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/barcode07/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode07.fastq 
+cat /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/barcode08/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode08.fastq 
+cat /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/barcode09/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode09.fastq 
+cat /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/barcode10/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode10.fastq 
+cat /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/barcode11/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode11.fastq 
+cat /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/barcode12/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode12.fastq 
+#
+porechop -i /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode07.fastq  -o /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode07_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode08.fastq  -o /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode08_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode09.fastq  -o /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode09_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode10.fastq  -o /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode10_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode11.fastq  -o /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode11_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071719RUN2/demultiplexed/run2_barcode12.fastq  -o /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode12_t.fastq 
+#
+nanoplot --summary /Volumes/BRN_seagate/minion/071719RUN2/basecalled/sequencing_summary.txt --loglength -o /Volumes/BRN_seagate/minion/071719RUN2/basecalled/sequencing_summary_nanoplot_loglength
+#
+cat /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode07_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode07_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode08_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode08_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode09_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode09_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode10_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode10_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode11_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode11_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071719RUN2/trimmed/run2_barcode12_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode12_t_f.fastq
+#
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode07_t_f.fastq > /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode08_t_f.fastq > /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode09_t_f.fastq > /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode10_t_f.fastq > /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode11_t_f.fastq > /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode12_t_f.fastq > /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_t_f_cp.fastq
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode07_t_f.fastq  >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode08_t_f.fastq  >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode09_t_f.fastq  >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode10_t_f.fastq  >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode11_t_f.fastq  >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode12_t_f.fastq  >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_map1.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode07_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_map1.paf /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode08_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_map1.paf /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode09_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_map1.paf /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode10_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_map1.paf /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode11_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_map1.paf /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode12_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_map1.paf /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_racon1.fasta
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_racon1.fasta    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode07_t_f.fastq   >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_racon1.fasta    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode08_t_f.fastq   >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_racon1.fasta    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode09_t_f.fastq   >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_racon1.fasta    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode10_t_f.fastq   >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_racon1.fasta    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode11_t_f.fastq   >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_racon1.fasta    /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode12_t_f.fastq   >    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_map2.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode07_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_map2.paf  /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_racon1.fasta   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode08_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_map2.paf  /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_racon1.fasta   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode09_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_map2.paf  /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_racon1.fasta   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode10_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_map2.paf  /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_racon1.fasta   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode11_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_map2.paf  /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_racon1.fasta   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071719RUN2/filtered/run2_barcode12_t_f.fastq    /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_map2.paf  /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_racon1.fasta   >   /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_racon2.fasta
+#
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode07_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode07_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode08_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode08_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode09_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode09_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode10_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode10_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode11_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode11_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071719RUN2/map_clean/run2_barcode12_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode12_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+#
+/Applications/ont-guppy-cpu/bin/./guppy_basecaller --input_path /Volumes/BRN_seagate/minion/071819RUN3/071819RUN3/20190718_1407_MN26301_FAL04400_802da6c9/fast5  --save_path /Volumes/BRN_seagate/minion/071819RUN3/basecalled   --flowcell FLO-MIN106 --kit SQK-LSK109
+/Applications/ont-guppy-cpu/bin/./guppy_barcoder -i /Volumes/BRN_seagate/minion/071819RUN3/basecalled  -s /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed --barcode_kits EXP-PBC001 
+#
+cat /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/barcode01/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode01.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/barcode02/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode02.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/barcode03/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode03.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/barcode04/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode04.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/barcode05/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode05.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/barcode06/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode06.fastq 
+#
+porechop -i /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode01.fastq  -o /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode01_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode02.fastq  -o /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode02_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode03.fastq  -o /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode03_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode04.fastq  -o /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode04_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode05.fastq  -o /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode05_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN3/demultiplexed/run3_barcode06.fastq  -o /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode06_t.fastq 
+#
+nanoplot --summary /Volumes/BRN_seagate/minion/071819RUN3/basecalled/sequencing_summary.txt --loglength -o /Volumes/BRN_seagate/minion/071819RUN3/basecalled/sequencing_summary_nanoplot_loglength
+#
+cat /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode01_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode01_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode02_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode02_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode03_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode03_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode04_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode04_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode05_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode05_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN3/trimmed/run3_barcode06_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode06_t_f.fastq
+#
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode01_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode02_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode03_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode04_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode05_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode06_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_t_f_cp.fastq
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode01_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode02_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode03_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode04_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode05_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode06_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_map1.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode01_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_map1.paf /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode02_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_map1.paf /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode03_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_map1.paf /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode04_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_map1.paf /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode05_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_map1.paf /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode06_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_map1.paf /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_racon1.fasta
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode01_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode02_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode03_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode04_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode05_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode06_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_map2.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode01_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_map2.paf  /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode02_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_map2.paf  /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode03_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_map2.paf  /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode04_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_map2.paf  /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode05_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_map2.paf  /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN3/filtered/run3_barcode06_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_map2.paf  /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_racon2.fasta
+#
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode01_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode01_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode02_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode02_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode03_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode03_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode04_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode04_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode05_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode05_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN3/map_clean/run3_barcode06_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode06_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+#
+/Applications/ont-guppy-cpu/bin/./guppy_basecaller --input_path /Volumes/BRN_seagate/minion/071819RUN4/fast5  --save_path /Volumes/BRN_seagate/minion/071819RUN4/basecalled   --flowcell FLO-MIN106 --kit SQK-LSK109
+/Applications/ont-guppy-cpu/bin/./guppy_barcoder -i /Volumes/BRN_seagate/minion/071819RUN4/basecalled  -s /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed --barcode_kits EXP-PBC001 
+#
+cat /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/barcode07/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode07.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/barcode08/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode08.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/barcode09/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode09.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/barcode10/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode10.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/barcode11/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode11.fastq 
+cat /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/barcode12/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode12.fastq 
+#
+porechop -i /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode07.fastq  -o /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode07_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode08.fastq  -o /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode08_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode09.fastq  -o /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode09_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode10.fastq  -o /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode10_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode11.fastq  -o /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode11_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071819RUN4/demultiplexed/run4_barcode12.fastq  -o /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode12_t.fastq 
+#
+nanoplot --summary /Volumes/BRN_seagate/minion/071819RUN4/basecalled/sequencing_summary.txt --loglength -o /Volumes/BRN_seagate/minion/071819RUN4/basecalled/sequencing_summary_nanoplot_loglength
+#
+cat /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode07_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode07_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode08_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode08_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode09_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode09_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode10_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode10_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode11_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode11_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN4/trimmed/run4_barcode12_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode12_t_f.fastq
+#
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode07_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode08_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode09_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode10_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode11_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode12_t_f.fastq > /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_t_f_cp.fastq
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode07_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode08_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode09_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode10_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode11_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode12_t_f.fastq  >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_map1.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode07_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_map1.paf /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode08_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_map1.paf /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode09_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_map1.paf /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode10_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_map1.paf /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode11_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_map1.paf /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode12_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_map1.paf /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_racon1.fasta
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode07_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode08_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode09_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode10_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode11_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_racon1.fasta    /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode12_t_f.fastq   >    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_map2.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode07_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_map2.paf  /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode08_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_map2.paf  /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode09_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_map2.paf  /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode10_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_map2.paf  /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode11_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_map2.paf  /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071819RUN4/filtered/run4_barcode12_t_f.fastq    /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_map2.paf  /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_racon1.fasta   >   /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_racon2.fasta
+#
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode07_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode07_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode08_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode08_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode09_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode09_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode10_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode10_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode11_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode11_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071819RUN4/map_clean/run4_barcode12_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode12_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+#
+/Applications/ont-guppy-cpu/bin/./guppy_basecaller --input_path /Volumes/BRN_seagate/minion/071919RUN5/fast5  --save_path /Volumes/BRN_seagate/minion/071919RUN5/basecalled   --flowcell FLO-MIN106 --kit SQK-LSK109
+/Applications/ont-guppy-cpu/bin/./guppy_barcoder -i /Volumes/BRN_seagate/minion/071919RUN5/basecalled  -s /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed --barcode_kits EXP-PBC001 
+#
+cat /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/barcode01/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode01.fastq 
+cat /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/barcode02/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode02.fastq 
+cat /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/barcode03/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode03.fastq 
+cat /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/barcode04/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode04.fastq 
+cat /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/barcode05/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode05.fastq 
+cat /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/barcode06/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode06.fastq 
+#
+porechop -i /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode01.fastq  -o /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode01_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode02.fastq  -o /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode02_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode03.fastq  -o /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode03_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode04.fastq  -o /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode04_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode05.fastq  -o /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode05_t.fastq 
+porechop -i /Volumes/BRN_seagate/minion/071919RUN5/demultiplexed/run5_barcode06.fastq  -o /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode06_t.fastq 
+#
+nanoplot --summary /Volumes/BRN_seagate/minion/071919RUN5/basecalled/sequencing_summary.txt --loglength -o /Volumes/BRN_seagate/minion/071919RUN5/basecalled/sequencing_summary_nanoplot_loglength
+#
+cat /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode01_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode01_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode02_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode02_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode03_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode03_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode04_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode04_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode05_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode05_t_f.fastq
+cat /Volumes/BRN_seagate/minion/071919RUN5/trimmed/run5_barcode06_t.fastq | NanoFilt -q 7 -l 100 --maxlength 1000 > /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode06_t_f.fastq
+#
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode01_t_f.fastq > /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode02_t_f.fastq > /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode03_t_f.fastq > /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode04_t_f.fastq > /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode05_t_f.fastq > /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_t_f_cp.fastq
+sed 's/@/@1/g' < /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode06_t_f.fastq > /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_t_f_cp.fastq
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode01_t_f.fastq  >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode02_t_f.fastq  >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode03_t_f.fastq  >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode04_t_f.fastq  >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode05_t_f.fastq  >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_map1.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_t_f_cp.fastq    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode06_t_f.fastq  >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_map1.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode01_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_map1.paf /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode02_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_map1.paf /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode03_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_map1.paf /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode04_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_map1.paf /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode05_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_map1.paf /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_racon1.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode06_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_map1.paf /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_t_f_cp.fastq   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_racon1.fasta
+#
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_racon1.fasta    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode01_t_f.fastq   >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_racon1.fasta    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode02_t_f.fastq   >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_racon1.fasta    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode03_t_f.fastq   >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_racon1.fasta    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode04_t_f.fastq   >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_racon1.fasta    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode05_t_f.fastq   >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_map2.paf
+minimap2  -x ava-ont /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_racon1.fasta    /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode06_t_f.fastq   >    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_map2.paf
+#
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode01_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_map2.paf  /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_racon1.fasta   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode02_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_map2.paf  /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_racon1.fasta   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode03_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_map2.paf  /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_racon1.fasta   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode04_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_map2.paf  /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_racon1.fasta   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode05_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_map2.paf  /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_racon1.fasta   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_racon2.fasta
+racon   -f  /Volumes/BRN_seagate/minion/071919RUN5/filtered/run5_barcode06_t_f.fastq    /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_map2.paf  /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_racon1.fasta   >   /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_racon2.fasta
+#
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode01_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode01_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode02_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode02_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode03_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode03_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode04_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode04_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode05_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode05_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+/Applications/ncbi-blast-2.9.0+/bin/./blastn -query /Volumes/BRN_seagate/minion/071919RUN5/map_clean/run5_barcode06_racon2.fasta -db /Users/batyanightingale/Desktop/SP/422019_BRN_COI/COI/COI_database -out /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode06_racon2_blast  -outfmt "6 qseqid sseqid pident length mismatch qstart qend sstart send qlen slen evalue bitscore gaps qseq" -num_threads 24 -max_target_seqs 1 -evalue 1e-20 
+#
+awk '{print "1\t" $0}' < /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode01_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run1_barcode01_racon2_blast
+awk '{print "2\t" $0}' < /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode02_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run1_barcode02_racon2_blast
+awk '{print "4\t" $0}' < /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode03_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run1_barcode03_racon2_blast
+awk '{print "5\t" $0}' < /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode04_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run1_barcode04_racon2_blast
+awk '{print "19\t" $0}' < /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode05_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run1_barcode05_racon2_blast
+awk '{print "20\t" $0}' < /Volumes/BRN_seagate/minion/071619RUN1/blast/run1_barcode06_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run1_barcode06_racon2_blast
+#
+awk '{print "21\t" $0}' < /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode07_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run2_barcode07_racon2_blast
+awk '{print "22\t" $0}' < /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode08_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run2_barcode08_racon2_blast
+awk '{print "23\t" $0}' < /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode09_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run2_barcode09_racon2_blast
+awk '{print "24\t" $0}' < /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode10_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run2_barcode10_racon2_blast
+awk '{print "25\t" $0}' < /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode11_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run2_barcode11_racon2_blast
+awk '{print "26\t" $0}' < /Volumes/BRN_seagate/minion/071719RUN2/blast/run2_barcode12_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run2_barcode12_racon2_blast
+#
+awk '{print "27\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode01_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run3_barcode01_racon2_blast
+awk '{print "28\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode02_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run3_barcode02_racon2_blast
+awk '{print "29\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode03_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run3_barcode03_racon2_blast
+awk '{print "30\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode04_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run3_barcode04_racon2_blast
+awk '{print "31\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode05_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run3_barcode05_racon2_blast
+awk '{print "36\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN3/blast/run3_barcode06_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run3_barcode06_racon2_blast
+#
+awk '{print "8\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode07_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run4_barcode07_racon2_blast
+awk '{print "9\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode08_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run4_barcode08_racon2_blast
+awk '{print "12\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode09_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run4_barcode09_racon2_blast
+awk '{print "14\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode10_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run4_barcode10_racon2_blast
+awk '{print "15\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode11_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run4_barcode11_racon2_blast
+awk '{print "39\t" $0}' < /Volumes/BRN_seagate/minion/071819RUN4/blast/run4_barcode12_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run4_barcode12_racon2_blast
+#
+awk '{print "41\t" $0}' < /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode01_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run5_barcode01_racon2_blast
+awk '{print "42\t" $0}' < /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode02_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run5_barcode02_racon2_blast
+awk '{print "43\t" $0}' < /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode03_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run5_barcode03_racon2_blast
+awk '{print "46\t" $0}' < /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode04_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run5_barcode04_racon2_blast
+awk '{print "47\t" $0}' < /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode05_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run5_barcode05_racon2_blast
+awk '{print "48\t" $0}' < /Volumes/BRN_seagate/minion/071919RUN5/blast/run5_barcode06_racon2_blast > /Volumes/BRN_seagate/minion/acadia_blasts/run5_barcode06_racon2_blast
+#
+cd /Volumes/BRN_seagate/minion/acadia_blasts 
+cat * > acadia_labeled_blasts
+#
+cat /Volumes/BRN_seagate/minion/071719RUN2/basecalled/*.fastq > /Volumes/BRN_seagate/minion/071719RUN2/R2_basecalled.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN3/basecalled/*.fastq > /Volumes/BRN_seagate/minion/071819RUN3/R3_basecalled.fastq
+cat /Volumes/BRN_seagate/minion/071819RUN4/basecalled/*.fastq > /Volumes/BRN_seagate/minion/071819RUN4/R4_basecalled.fastq
+cat /Volumes/BRN_seagate/minion/071919RUN5/basecalled/*.fastq > /Volumes/BRN_seagate/minion/071919RUN5/R5_basecalled.fastq
+cat /Volumes/BRN_seagate/minion/071619RUN1/R1_basecalled.fastq /Volumes/BRN_seagate/minion/071719RUN2/R2_basecalled.fastq /Volumes/BRN_seagate/minion/071819RUN3/R3_basecalled.fastq /Volumes/BRN_seagate/minion/071819RUN4/R4_basecalled.fastq /Volumes/BRN_seagate/minion/071919RUN5/R5_basecalled.fastq > /Volumes/BRN_seagate/minion/acadia_basecalled.fastq
+#
+nanoplot -t 4 --fastq /Volumes/BRN_seagate/minion/acadia_basecalled.fastq --maxlength 2000 --N50 --title Acadia 
+
+#########################################################################################
+###      ACADIA   R       SCRIPT     ####################################################
+#########################################################################################
+#This is the very last step in the pipeline 
+#This is all done in R 
+
+#set wd to /Volumes/BRN_seagate/minion/acadiaR
+#upload accession taxa database (homemade from blast db)
+accessions_taxa=read.delim("taxdb2.txt", header=FALSE, sep="\t")
+#assigning names to the columns of the acessions taxa db
+names(accessions_taxa2) <- c("accession", "taxa")
+#uploading tab blast that has been labeled with sampleids with awk and concatonated
+blast=read.delim("acadia_labeled_blasts", header=FALSE, sep = "\t")
+#assigning column names for labeled blast data
+names(blast) <- c("sample", "sequenceID", "accession", "pairwiseident", "length", "mismatch", "qstart", "qend", "sstart", "send", "qlen", "slen", "eval", "bitscore", "gaps", "qseq" )
+#uploading the master acadia dataset 
+mercury=read.csv("mercury.csv", header=TRUE, sep = ",")
+
+#applying taxa names to tabular blast file with merge 
+blast_taxa=merge(blast, accessions_taxa2, by.x="accession", by.y="accession", all.x=TRUE, all.y=FALSE)
+#merging acadia bird/blood data to blast data 
+blast_taxa_mercury=merge(blast_taxa, mercury, by.x="sample", by.y="sample", all.x=TRUE, all.y=FALSE)
+
+#removing a subset where blast pairwise identity is or above 97 (this is to be used for analysis)
+blast_taxa_mercury_97=subset(blast_taxa_mercury, blast_taxa_mercury$pairwiseident >= 97)

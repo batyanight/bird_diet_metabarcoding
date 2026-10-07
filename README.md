@@ -1,4 +1,3 @@
-[bird_diet_metabarcoding-README.md](https://github.com/user-attachments/files/33134786/bird_diet_metabarcoding-README.md)
 # Songbird diet metabarcoding with MinION nanopore sequencing
 
 **Undergraduate thesis code, Purchase College, SUNY, 2019.**
